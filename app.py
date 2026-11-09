@@ -155,16 +155,24 @@ def topics_version(t):
 #   「カード」シート … カードを作るたびに1行ふえる（番号＝行番号−1）
 #   「お題」シート   … 運営が保存したお題
 # ------------------------------------------------------------
+def spreadsheet_id():
+    """スプレッドシートのURLをそのまま貼っても、IDだけを取り出す"""
+    text = str(secret("SPREADSHEET_ID") or "").strip()
+    m = re.search(r"/d/([A-Za-z0-9_-]+)", text)
+    return m.group(1) if m else text
+
+
 @st.cache_resource(show_spinner=False)
 def _open_sheets():
     import gspread
     from google.oauth2.service_account import Credentials
 
-    info = dict(st.secrets["gcp_service_account"])
+    raw = secret("GCP_JSON")  # JSONファイルの中身をそのまま貼った場合
+    info = json.loads(str(raw)) if raw else dict(st.secrets["gcp_service_account"])
     creds = Credentials.from_service_account_info(
         info, scopes=["https://www.googleapis.com/auth/spreadsheets"]
     )
-    book = gspread.authorize(creds).open_by_key(str(st.secrets["SPREADSHEET_ID"]))
+    book = gspread.authorize(creds).open_by_key(spreadsheet_id())
 
     def ensure(title, header, cols):
         try:
@@ -231,8 +239,8 @@ def current_topics():
 
 
 def sheet_status():
-    if not secret("SPREADSHEET_ID") or not secret("gcp_service_account"):
-        return "未設定（Secretsに SPREADSHEET_ID と gcp_service_account を設定してください）"
+    if not secret("SPREADSHEET_ID") or not (secret("GCP_JSON") or secret("gcp_service_account")):
+        return "未設定（Secretsに SPREADSHEET_ID と GCP_JSON を設定してください）"
     if sheets():
         return "接続OK"
     return f"接続できません（{STORE['sheet_error']}）"
