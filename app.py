@@ -84,17 +84,30 @@ LINES = [
     [0, 3, 6], [1, 4, 7], [2, 5, 8],
     [0, 4, 8], [2, 4, 6],
 ]
+# ▼ 入力欄の表示切り替え（True にすると、その「課題」欄が出ます。False だと消えます）
+SHOW_ISSUE_CELL = False  # マスをタップして開く、メモ欄の「課題」
+SHOW_ISSUE_OWN = False  # 自分のお題のメモの「課題」
+
 # (キー, ラベル, 複数行かどうか)
 FIELDS_CELL = [
-    ("who", "👤 話した人（ニックネームでもOK）", False),
-    ("issue", "⚠️ 課題", True),
-    ("solution", "💡 解決策", True),
-    ("thoughts", "💬 感想", True),
+    f
+    for f in [
+        ("who", "👤 話した人（ニックネームでもOK）", False),
+        ("issue", "⚠️ 課題", True),
+        ("solution", "💡 解決策", True),
+        ("thoughts", "💬 感想", True),
+    ]
+    if f[0] != "issue" or SHOW_ISSUE_CELL
 ]
 FIELDS_OWN = [
-    ("issue", "⚠️ 課題", True),
-    ("solution", "💡 解決策", True),
+    f
+    for f in [
+        ("issue", "⚠️ 課題", True),
+        ("solution", "💡 解決策", True),
+    ]
+    if f[0] != "issue" or SHOW_ISSUE_OWN
 ]
+CSV_LABELS = {"who": "話した人", "issue": "課題", "solution": "解決策", "thoughts": "感想"}
 
 # カードの組み合わせ数：四隅 6×5×4×3=360通り × 十字 7×6×5×4×3=2520通り = 907,200通り
 N_CORNER_PERM = 6 * 5 * 4 * 3
@@ -469,17 +482,17 @@ def save_topics():
 # 表示用の部品
 # ------------------------------------------------------------
 def build_csv(n, cells, own):
+    cell_keys = [f for f, _, _ in FIELDS_CELL]
+    own_keys = [f for f, _, _ in FIELDS_OWN]
+    cols = [k for k in ("who", "issue", "solution", "thoughts") if k in cell_keys or k in own_keys]
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["マス", "お題", "チェック", "話した人", "課題", "解決策", "感想"])
+    w.writerow(["マス", "お題", "チェック"] + [CSV_LABELS[k] for k in cols])
     for pos in range(9):
-        mk = f"{n}_{pos}"
-        g = lambda f: st.session_state.get(f"in_m_{mk}_{f}", "")
-        w.writerow(
-            [pos + 1, cells[pos], "○" if is_on(n, pos) else "", g("who"), g("issue"), g("solution"), g("thoughts")]
-        )
-    g = lambda f: st.session_state.get(f"in_m_{n}_own_{f}", "")
-    w.writerow(["自分のお題", own, "", "", g("issue"), g("solution"), ""])
+        g = lambda f: st.session_state.get(f"in_m_{n}_{pos}_{f}", "") if f in cell_keys else ""
+        w.writerow([pos + 1, cells[pos], "○" if is_on(n, pos) else ""] + [g(k) for k in cols])
+    g = lambda f: st.session_state.get(f"in_m_{n}_own_{f}", "") if f in own_keys else ""
+    w.writerow(["自分のお題", own, ""] + [g(k) for k in cols])
     return buf.getvalue().encode("utf-8-sig")  # Excelでも文字化けしない
 
 
@@ -668,7 +681,8 @@ own_filled = any(
 st.info(f"⭐ あなたのお題（{role}）：{esc(own)}")
 if own_filled:
     st.caption("📝 自分のお題のメモを記入済みです")
-with st.expander("📝 自分のお題のメモ（課題・解決策）"):
+_own_label = "・".join(lab.split(" ", 1)[1] for _, lab, _ in FIELDS_OWN)
+with st.expander(f"📝 自分のお題のメモ（{_own_label}）"):
     for f, label, multi in FIELDS_OWN:
         st.text_area(label, key=f"in_m_{n}_own_{f}", height=90)
 
